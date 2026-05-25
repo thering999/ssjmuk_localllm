@@ -24,15 +24,15 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `relative text-sm font-black px-8 py-3 rounded-full transition-all duration-700 overflow-hidden group/nav ${
+        `relative text-xs font-black px-6 py-2 rounded-full transition-all duration-500 overflow-hidden group/nav ${
           isActive
-            ? 'text-white bg-gradient-to-r from-primary via-secondary to-primary shadow-[0_15px_30px_-5px_rgba(var(--primary),0.8)] scale-110 ring-4 ring-white/30'
-            : 'text-muted-foreground hover:text-primary hover:bg-white/80 dark:hover:bg-white/10 shadow-lg'
+            ? 'text-white bg-gradient-to-r from-primary via-secondary to-primary shadow-lg scale-105 ring-2 ring-white/30'
+            : 'text-muted-foreground hover:text-primary hover:bg-white/50 dark:hover:bg-white/10 shadow-sm'
         }`
       }
     >
-      <span className="relative z-10 uppercase tracking-[0.4em] transition-transform group-hover/nav:scale-110 inline-block font-black drop-shadow-2xl">{children}</span>
-      <div className="absolute inset-0 bg-white/30 -translate-x-full group-hover/nav:animate-shimmer" />
+      <span className="relative z-10 uppercase tracking-widest">{children}</span>
+      <div className="absolute inset-0 bg-white/20 -translate-x-full group-hover/nav:animate-shimmer" />
     </NavLink>
   )
 }
@@ -58,11 +58,11 @@ function DarkModeToggle() {
   }
 
   return (
-    <Button variant="ghost" size="icon" onClick={toggle} className="size-14 rounded-3xl bg-white/60 dark:bg-white/10 backdrop-blur-3xl border-2 border-white shadow-3xl hover:rotate-[360deg] transition-all duration-1000 group">
+    <Button variant="ghost" size="icon" onClick={toggle} className="size-10 rounded-2xl bg-white/50 dark:bg-white/10 backdrop-blur-3xl border border-white shadow-xl hover:rotate-180 transition-all duration-700">
       {dark ? (
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-accent group-hover:scale-125 transition-transform"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
       ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-secondary group-hover:scale-125 transition-transform"><path d="M12 3a6 6 0 0 0 9 9 9 0 1 1-9-9Z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
       )}
     </Button>
   )
@@ -70,14 +70,13 @@ function DarkModeToggle() {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-6 group cursor-pointer p-2">
-      <div className="relative size-20 flex items-center justify-center bg-white rounded-2xl shadow-[0_20px_50px_-10px_rgba(var(--primary),0.5)] border-4 border-primary/20 p-3 group-hover:scale-110 transition-all duration-1000 group-hover:rotate-[360deg] ring-8 ring-primary/5">
-        <div className="absolute inset-[-15px] rounded-[2.5rem] border-[6px] border-dashed border-primary/40 animate-spin-slow opacity-40 group-hover:opacity-100 transition-opacity" />
+    <div className="flex items-center gap-4 group cursor-pointer">
+      <div className="relative size-12 flex items-center justify-center bg-white rounded-2xl shadow-xl border-2 border-primary/20 p-1.5 group-hover:scale-105 transition-all duration-500 ring-4 ring-primary/5">
         <img src={mophLogo} alt="Logo" className="size-full object-contain animate-pulse" />
       </div>
       <div className="flex flex-col">
-        <span className="font-black tracking-tighter text-4xl leading-none text-neon-master drop-shadow-[0_15px_30px_rgba(0,0,0,0.3)]">สสจ.มุกดาหาร</span>
-        <span className="text-[11px] text-muted-foreground font-black leading-tight uppercase tracking-[0.5em] opacity-90 mt-2 ml-1 border-l-4 border-primary pl-4">Provincial Health Office</span>
+        <span className="font-black tracking-tighter text-2xl leading-none text-neon- master bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent animate-gradient drop-shadow-sm">สสจ.มุกดาหาร</span>
+        <span className="text-[9px] text-muted-foreground font-black leading-tight uppercase tracking-[0.2em] opacity-80 mt-0.5">Provincial Health Office</span>
       </div>
     </div>
   )
@@ -95,22 +94,18 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <div className="min-h-screen relative overflow-hidden transition-colors duration-1000 selection:bg-secondary">
+        <div className="min-h-screen relative overflow-hidden transition-colors duration-1000 selection:bg-primary/50">
           {/* SUPREME LIVING AURA BACKGROUND */}
           <div className="fixed inset-0 z-0 pointer-events-none">
-            <div className="absolute top-[-30%] left-[-20%] size-[120%] rounded-full bg-primary/40 blur-[250px] animate-floating" />
-            <div className="absolute bottom-[-30%] right-[-20%] size-[120%] rounded-full bg-secondary/40 blur-[250px] animate-floating" style={{ animationDelay: '-10s' }} />
-            <div className="absolute top-[20%] right-[-10%] size-[90%] rounded-full bg-accent/30 blur-[200px] animate-floating" style={{ animationDelay: '-20s' }} />
-            
-            {/* Animated Stardust */}
-            <div className="absolute inset-0 opacity-15 mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] scale-[2]" />
+            <div className="absolute top-[-20%] left-[-10%] size-[80%] rounded-full bg-primary/10 blur-[150px] animate-supreme-aura" />
+            <div className="absolute bottom-[-20%] right-[-10%] size-[80%] rounded-full bg-secondary/15 blur-[150px] animate-supreme-aura" style={{ animationDelay: '-8s' }} />
           </div>
 
-          <header className="sticky top-0 z-50 h-36 flex items-center bg-white/10 dark:bg-black/10 backdrop-blur-[150px] border-b-8 border-white/60 dark:border-white/10 shadow-[0_50px_150px_-20px_rgba(0,0,0,0.4)]">
-            <div className="max-w-[1500px] mx-auto w-full px-12 flex items-center justify-between">
+          <header className="sticky top-0 z-50 h-20 flex items-center bg-white/20 dark:bg-black/20 backdrop-blur-[60px] border-b border-white/40 shadow-xl shadow-primary/5">
+            <div className="max-w-6xl mx-auto w-full px-8 flex items-center justify-between">
               <Brand />
-              <div className="flex items-center gap-12">
-                <nav className="flex items-center gap-8 bg-white/80 dark:bg-black/60 p-4 rounded-[4rem] border-4 border-white shadow-3xl backdrop-blur-3xl ring-[20px] ring-white/10 transition-all hover:ring-primary/20">
+              <div className="flex items-center gap-8">
+                <nav className="flex items-center gap-3 bg-white/60 dark:bg-black/40 p-1.5 rounded-full border border-white shadow-xl backdrop-blur-3xl ring-2 ring-white/10">
                   <NavItem to="/playground">Playground</NavItem>
                   {isLoggedIn && (
                     <>
@@ -120,14 +115,14 @@ function App() {
                     </>
                   )}
                 </nav>
-                <div className="flex items-center gap-10">
+                <div className="flex items-center gap-4">
                   <DarkModeToggle />
                   {isLoggedIn ? (
                     <Button 
                       variant="ghost" 
-                      size="lg" 
+                      size="sm" 
                       onClick={handleLogout}
-                      className="h-16 rounded-[2.5rem] px-10 font-black uppercase tracking-[0.2em] text-[12px] text-destructive hover:bg-destructive hover:text-white border-4 border-destructive/20 hover:border-destructive shadow-3xl transition-all active:scale-90"
+                      className="rounded-full px-5 font-black uppercase tracking-widest text-[10px] text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 transition-all h-9"
                     >
                       Logout
                     </Button>
@@ -135,8 +130,8 @@ function App() {
                     <NavLink to="/login">
                       <Button 
                         variant="ghost" 
-                        size="lg"
-                        className="h-16 rounded-[2.5rem] px-10 font-black uppercase tracking-[0.2em] text-[12px] text-primary hover:bg-primary hover:text-white border-4 border-primary/20 hover:border-primary shadow-3xl transition-all active:scale-90"
+                        size="sm"
+                        className="rounded-full px-5 font-black uppercase tracking-widest text-[10px] text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-all h-9"
                       >
                         Admin
                       </Button>
@@ -147,7 +142,7 @@ function App() {
             </div>
           </header>
           
-          <main className="max-w-[1500px] mx-auto px-12 py-20 relative z-10 animate-in fade-in slide-in-from-bottom-20 duration-1000">
+          <main className="max-w-6xl mx-auto px-8 py-10 relative z-10 animate-in fade-in slide-in-from-bottom-5 duration-700">
             <Routes>
               <Route path="/" element={<Navigate to="/playground" replace />} />
               <Route path="/playground" element={<PlaygroundPage />} />
@@ -160,8 +155,8 @@ function App() {
             </Routes>
           </main>
           
-          {/* Supreme Infinite Horizon Glow */}
-          <div className="fixed bottom-0 left-0 right-0 h-4 bg-gradient-to-r from-primary via-secondary to-accent bg-[length:200%_auto] animate-plasma shadow-[0_-20px_100px_var(--primary)] border-t-4 border-white/20" />
+          {/* Footer Glow */}
+          <div className="fixed bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-secondary to-accent animate-gradient shadow-[0_0_20px_var(--primary)]" />
         </div>
       </BrowserRouter>
     </QueryClientProvider>
