@@ -9,10 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Sparkles, Send, Mic, Paperclip, Trash2, 
-  ChevronRight, ChevronLeft, Download,
+  ChevronRight, Download, 
   Terminal, Activity, Zap, Cpu, History, Search,
   BarChart3, FileText, Copy, Pin, PinOff,
-  Settings2, Eye, Brain, Database, ShieldAlert
+  Database, ShieldAlert, Palette
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -122,7 +122,7 @@ export default function PlaygroundPage() {
 
   const availableModels = fallbackEntries.filter(e => e.keyCount > 0 && e.enabled)
 
-  // --- Persistence ---
+  // --- Effects ---
   useEffect(() => {
     localStorage.setItem('chat_sessions', JSON.stringify(sessions))
   }, [sessions])
@@ -135,7 +135,7 @@ export default function PlaygroundPage() {
   const createNewSession = () => {
     const newSession: ChatSession = {
       id: Date.now().toString(),
-      title: 'Intelligence Initialized',
+      title: 'Neural Link Start',
       messages: [],
       createdAt: Date.now()
     }
@@ -193,9 +193,13 @@ export default function PlaygroundPage() {
     e.target.value = ''
   }
 
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
+
   const handleVoiceInput = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) return
+    if (!SpeechRecognition) return alert('Browser not supported')
     const recognition = new SpeechRecognition()
     recognition.lang = 'th-TH'
     recognition.onstart = () => setIsRecording(true)
@@ -223,9 +227,11 @@ export default function PlaygroundPage() {
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content, timestamp: Date.now() }
     const updatedMessages = [...messages, userMsg]
     updateCurrentSession(updatedMessages)
+    
     setInput('')
     setAttachments([])
     setLoading(true)
+    if (inputRef.current) inputRef.current.style.height = 'auto'
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -242,7 +248,7 @@ export default function PlaygroundPage() {
       })
 
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error?.message || 'AI Core Fault')
+      if (!res.ok) throw new Error(data.error?.message || 'Error')
 
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -258,19 +264,20 @@ export default function PlaygroundPage() {
         setRightPanel('workspace')
       }
     } catch (err: any) {
-      updateCurrentSession([...updatedMessages, { id: Date.now().toString(), role: 'assistant', content: `⚠️ FAULT: ${err.message}`, timestamp: Date.now() }])
+      updateCurrentSession([...updatedMessages, { id: (Date.now() + 1).toString(), role: 'assistant', content: `⚠️ SYSTEM FAULT: ${err.message}`, timestamp: Date.now() }])
     } finally {
       setLoading(false)
+      setTimeout(() => inputRef.current?.focus(), 0)
     }
   }
 
   const exportChat = () => {
-    const text = messages.map(m => `[${m.role.toUpperCase()}]\n${typeof m.content === 'string' ? m.content : 'Binary Linked'}\n`).join('\n---\n\n')
+    const text = messages.map(m => `[${m.role.toUpperCase()}]\n${typeof m.content === 'string' ? m.content : 'Attachment'}\n`).join('\n---\n\n')
     const blob = new Blob([text], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `Neural-Export-${Date.now()}.md`
+    a.download = `PHO-Intelligence-Export-${Date.now()}.md`
     a.click()
   }
 
@@ -290,11 +297,11 @@ export default function PlaygroundPage() {
         {sidebarOpen && (
           <motion.aside initial={{ width: 0, opacity: 0 }} animate={{ width: 280, opacity: 1 }} exit={{ width: 0, opacity: 0 }} className="flex flex-col gap-3 shrink-0 overflow-hidden border-r border-white/5 pr-2">
             <Button onClick={createNewSession} className={`w-full h-10 rounded-xl bg-gradient-to-r ${THEMES[activeTheme]} text-white font-black shadow-lg active:scale-95 transition-all text-[11px] uppercase tracking-wider`}>
-              <Sparkles className="size-3.5 mr-2" /> New Neural Core
+              <Sparkles className="size-3.5 mr-2" /> New Nexus Link
             </Button>
             
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground opacity-40" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground opacity-50" />
               <input 
                 type="text" placeholder="Protocol filter..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full h-9 bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 text-[11px] font-bold focus:border-primary/40 outline-none transition-all placeholder:text-[10px]"
@@ -307,7 +314,7 @@ export default function PlaygroundPage() {
                     <div className="flex items-center gap-3">
                        <div className={`size-1.5 rounded-full ${currentSessionId === s.id ? 'bg-primary animate-pulse' : 'bg-white/20'}`} />
                        <span className={`text-[11px] font-bold truncate flex-1 ${currentSessionId === s.id ? 'text-white' : 'text-muted-foreground'}`}>{s.title}</span>
-                       <button onClick={(e) => deleteSession(s.id, e)} className="opacity-0 group-hover/session:opacity-100 hover:text-destructive transition-all"><Trash2 className="size-3.5" /></button>
+                       <button onClick={(e) => deleteSession(s.id, e)} className="opacity-0 group-hover/session:opacity-100 hover:text-destructive transition-all duration-300"><Trash2 className="size-3.5" /></button>
                     </div>
                  </div>
                ))}
@@ -315,12 +322,12 @@ export default function PlaygroundPage() {
 
             <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-4">
                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Aura Spectrum</span>
+                  <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Neural Aura</span>
                   <Palette className="size-3 opacity-30" />
                </div>
-               <div className="flex justify-between gap-1">
+               <div className="flex justify-between">
                   {Object.keys(THEMES).map(t => (
-                    <button key={t} onClick={() => setActiveTheme(t as any)} className={`size-6 rounded-lg border-2 transition-all ${activeTheme === t ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-30'} bg-gradient-to-br ${THEMES[t as keyof typeof THEMES]}`} />
+                    <button key={t} onClick={() => setActiveTheme(t as any)} className={`size-6 rounded-lg border-2 transition-all ${activeTheme === t ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40'} bg-gradient-to-br ${THEMES[t as keyof typeof THEMES]}`} />
                   ))}
                </div>
             </div>
@@ -338,16 +345,16 @@ export default function PlaygroundPage() {
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="size-8 rounded-lg hover:bg-white/10 flex items-center justify-center transition-all text-muted-foreground"><History className="size-4.5" /></button>
               <Separator orientation="vertical" className="h-4 bg-white/10" />
               <div className="flex items-center gap-3">
-                 <Badge variant="outline" className="text-[8px] h-5 px-2 bg-primary/10 border-primary/30 text-primary font-black uppercase tracking-widest animate-pulse">Neural Active</Badge>
+                 <Badge variant="outline" className="text-[8px] h-5 px-2 bg-primary/10 border-primary/30 text-primary font-black uppercase tracking-widest animate-pulse">{activeModelLabel} Active</Badge>
                  <span className="text-[10px] font-black text-white/40 uppercase tracking-tighter truncate max-w-[200px]">{currentSession.title}</span>
               </div>
            </div>
            
            <div className="flex items-center gap-2">
-              <div className="relative group/search">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground opacity-20" />
+              <div className="relative group/msgsearch">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground opacity-30" />
                 <input 
-                  type="text" placeholder="Search protocol..." value={msgSearch} onChange={(e) => setMsgSearch(e.target.value)}
+                  type="text" placeholder="Matrix search..." value={msgSearch} onChange={(e) => setMsgSearch(e.target.value)}
                   className="w-32 h-7 bg-white/5 border border-white/10 rounded-lg pl-8 pr-2 text-[9px] font-bold focus:w-48 outline-none transition-all placeholder:text-[8px]"
                 />
               </div>
@@ -367,10 +374,9 @@ export default function PlaygroundPage() {
               <div className="space-y-4">
                  <motion.div animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} className="relative size-20 mx-auto">
                     <div className="absolute inset-0 bg-primary/20 rounded-full blur-3xl animate-pulse" />
-                    <Brain className="size-20 text-primary opacity-30" />
+                    <Cpu className="size-20 text-primary opacity-30" />
                  </motion.div>
                  <h2 className={`text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r ${THEMES[activeTheme]} animate-plasma-vivid uppercase tracking-[0.2em] leading-none`}>Neural Nexus v6.0</h2>
-                 <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.6em]">System Intelligence Hub · SSJ MUKDAHAN</p>
               </div>
               <div className="grid grid-cols-2 gap-3 w-full max-w-lg">
                  {PERSONA_PRESETS.map(p => (
@@ -381,7 +387,7 @@ export default function PlaygroundPage() {
                  ))}
               </div>
               <div className="flex flex-wrap justify-center gap-2 max-w-lg">
-                 {['สรุปเนื้อหา', 'ร่างร่างเอกสาร', 'วิเคราะห์สถิติ', 'ตรวจสอบกฎหมาย'].map((txt, i) => (
+                 {['สรุปรายงาน', 'ร่างบันทึกข้อความ', 'ตรวจคำผิด', 'วิเคราะห์ข้อมูล'].map((txt, i) => (
                    <Button key={i} variant="ghost" onClick={() => quickAction(txt)} className="h-8 rounded-full bg-white/5 hover:bg-primary hover:text-white border border-white/10 text-[9px] font-black uppercase px-4 transition-all">{txt}</Button>
                  ))}
               </div>
@@ -391,14 +397,14 @@ export default function PlaygroundPage() {
               {filteredMessages.map((msg) => (
                 <motion.div key={msg.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group/msg relative`}>
                   <div className={`relative flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[85%]`}>
-                    <div className={`rounded-2xl px-5 py-3 text-[13.5px] leading-relaxed shadow-xl border backdrop-blur-3xl transition-all ${msg.role === 'user' ? `bg-gradient-to-br ${THEMES[activeTheme]} text-white border-white/10 rounded-tr-none shadow-primary/20` : 'bg-white/95 dark:bg-zinc-900/95 text-foreground border-white dark:border-zinc-800 rounded-tl-none ai-bubble'}`}>
+                    <div className={`rounded-2xl px-5 py-3 text-[13.5px] leading-relaxed shadow-xl border backdrop-blur-3xl transition-all ${msg.role === 'user' ? `bg-gradient-to-br ${THEMES[activeTheme]} text-white border-white/10 rounded-tr-none shadow-primary/30` : 'bg-white/95 dark:bg-zinc-950/95 text-foreground border-white dark:border-zinc-800 rounded-tl-none ai-bubble'}`}>
                        <div className="markdown-content font-medium tracking-tight prose prose-sm prose-emerald dark:prose-invert max-w-none">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{typeof msg.content === 'string' ? msg.content : 'Complex data matrix link established.'}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{typeof msg.content === 'string' ? msg.content : 'Multi-modal data matrix.'}</ReactMarkdown>
                        </div>
                     </div>
                     <div className="flex items-center gap-4 mt-1.5 px-3 transition-all opacity-0 group-hover/msg:opacity-100">
                        <span className="text-[8px] font-black text-white/20 uppercase tracking-tighter">{new Date(msg.timestamp).toLocaleTimeString()}</span>
-                       <button onClick={() => togglePin(msg.id)} className={`transition-all ${msg.pinned ? 'text-amber-500 scale-125' : 'text-white/20 hover:text-white'}`}>{msg.pinned ? <Pin className="size-3" /> : <PinOff className="size-3" />}</button>
+                       <button onClick={() => togglePin(msg.id)} className={`transition-all ${msg.pinned ? 'text-amber-500 scale-125 shadow-glow' : 'text-white/20 hover:text-white'}`}>{msg.pinned ? <Pin className="size-3" /> : <PinOff className="size-3" />}</button>
                        <button onClick={() => navigator.clipboard.writeText(typeof msg.content === 'string' ? msg.content : '')} className="text-[9px] font-black text-primary/40 hover:text-primary uppercase flex items-center gap-1"><Copy className="size-2.5" /> Copy</button>
                        <button onClick={() => deleteMessage(msg.id)} className="text-[9px] font-black text-destructive/40 hover:text-destructive uppercase flex items-center gap-1"><Trash2 className="size-2.5" /> Del</button>
                        {msg.meta && <span className="text-[8px] font-black text-primary/20 uppercase">{msg.meta.latency}ms · {msg.meta.usage?.total_tokens}T</span>}
@@ -414,7 +420,7 @@ export default function PlaygroundPage() {
                  <div className="flex gap-1.5">
                     {[0, 1, 2].map(i => <div key={i} className="size-1 rounded-full bg-primary animate-bounce shadow-[0_0_8px_var(--primary)]" style={{ animationDelay: `${i * 150}ms` }} />)}
                  </div>
-                 <span className="text-[10px] font-black uppercase text-primary tracking-widest leading-none">Neural Link Synced</span>
+                 <span className="text-[10px] font-black uppercase text-primary tracking-widest leading-none">Neural Processing</span>
               </div>
             </div>
           )}
@@ -427,7 +433,7 @@ export default function PlaygroundPage() {
              {attachments.map((att, idx) => (
                 <div key={idx} className="relative group/att animate-in zoom-in-75 duration-300">
                   {att.type === 'image' ? <img src={att.data} className="size-14 object-cover rounded-xl border border-white/20 shadow-lg" alt="" /> : <div className="size-14 flex flex-col items-center justify-center bg-white/5 rounded-xl border border-white/20 shadow-lg text-[7px] font-black p-2 text-center"><FileText className="size-5 text-primary mb-1" /><span className="truncate w-full uppercase">{att.name}</span></div>}
-                  <button onClick={() => removeAttachment(idx)} className="absolute -top-1.5 -right-1.5 size-5 bg-destructive text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 z-20"><Trash2 className="size-3" /></button>
+                  <button onClick={() => removeAttachment(idx)} className="absolute -top-1.5 -right-1.5 size-5 bg-destructive text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 z-20"><Trash2 className="size-3" /></button>
                 </div>
              ))}
           </div>
@@ -440,7 +446,7 @@ export default function PlaygroundPage() {
             <div className="flex-1 relative">
               <textarea 
                 ref={inputRef} value={input} onChange={e => setInput(e.target.value)} 
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())} 
+                onKeyDown={handleKeyDown} 
                 placeholder="Submit query to neural link..." rows={1} 
                 className="relative w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-[14px] font-medium focus:border-primary focus:bg-white/10 outline-none transition-all min-h-[42px] max-h-[180px] custom-scrollbar placeholder:text-[12px] placeholder:opacity-20" 
                 style={{ height: 'auto', overflow: 'hidden' }} onInput={e => { const el = e.target as HTMLTextAreaElement; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 180) + 'px'; }} 
@@ -485,7 +491,7 @@ export default function PlaygroundPage() {
                         <div className="space-y-2">
                            <Label className="text-[9px] font-black uppercase text-primary/60 block mb-2 tracking-widest">Core Engine Engine</Label>
                            <Select value={selectedModel} onValueChange={(v) => setSelectedModel(v ?? 'auto')}>
-                              <SelectTrigger className="w-full h-9 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-tighter px-4 shadow-inner transition-all hover:bg-white/10"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="w-full h-9 rounded-xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-tighter px-4 transition-all hover:bg-white/10"><SelectValue /></SelectTrigger>
                               <SelectContent className="rounded-2xl border-white/10 backdrop-blur-3xl bg-zinc-950 shadow-3xl">
                                  <SelectItem value="auto" className="font-black text-[10px] uppercase p-3">Dynamic Route</SelectItem>
                                  <Separator className="my-1 opacity-5" />
