@@ -24,8 +24,8 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
       className={({ isActive }) =>
         `relative text-[10px] font-black px-6 py-2 rounded-full transition-all duration-500 overflow-hidden group/nav uppercase tracking-widest ${
           isActive
-            ? 'text-white bg-gradient-to-r from-primary via-secondary to-primary shadow-[0_0_20px_rgba(74,222,128,0.4)] scale-105 ring-2 ring-white/30'
-            : 'text-muted-foreground hover:text-primary hover:bg-white/10'
+            ? 'text-white bg-gradient-to-r from-emerald-500 via-blue-600 to-emerald-500 shadow-[0_0_30px_rgba(74,222,128,0.4)] scale-105 ring-2 ring-white/30'
+            : 'text-zinc-500 hover:text-emerald-400 hover:bg-white/5'
         }`
       }
     >
@@ -40,29 +40,30 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <div className="min-h-screen relative overflow-hidden bg-zinc-950 text-white selection:bg-primary/40">
+        <div className="min-h-screen relative overflow-hidden bg-zinc-950 text-white selection:bg-emerald-500/40">
           
-          <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-             <div className="absolute top-[-20%] left-[-10%] size-[100%] rounded-full bg-primary/20 blur-[150px] animate-aura-vivid" />
-             <div className="absolute bottom-[-30%] right-[-10%] size-[100%] rounded-full bg-secondary/30 blur-[180px] animate-aura-vivid" style={{ animationDelay: '-5s' }} />
-             <div className="absolute top-[30%] right-[-20%] size-[80%] rounded-full bg-accent/20 blur-[200px] animate-aura-vivid" style={{ animationDelay: '-10s' }} />
-             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay" />
+          {/* SUPREME COSMIC CORE BACKGROUND */}
+          <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#09090b]">
+             <div className="absolute top-[-25%] left-[-15%] size-[120%] rounded-full bg-emerald-500/10 blur-[180px] aura-primary" />
+             <div className="absolute bottom-[-30%] right-[-15%] size-[120%] rounded-full bg-blue-600/15 blur-[200px] aura-secondary" />
+             <div className="absolute top-[20%] right-[-20%] size-[90%] rounded-full bg-purple-600/10 blur-[220px] aura-accent" />
+             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-40 mix-blend-overlay" />
           </div>
 
-          <header className="sticky top-0 z-50 h-16 flex items-center bg-black/40 backdrop-blur-[100px] border-b border-white/10 shadow-2xl">
+          <header className="sticky top-0 z-50 h-16 flex items-center bg-black/60 backdrop-blur-[120px] border-b border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.5)]">
             <div className="max-w-[1700px] mx-auto w-full px-8 flex items-center justify-between">
               <div className="flex items-center gap-4 group">
-                <div className="size-10 bg-white rounded-xl shadow-xl border-2 border-primary/20 p-1 group-hover:scale-110 transition-transform duration-500">
+                <div className="size-11 bg-white rounded-2xl shadow-2xl border-2 border-emerald-500/20 p-1.5 group-hover:scale-110 transition-transform duration-700">
                   <img src={mophLogo} alt="Logo" className="size-full object-contain" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-black text-xl leading-none text-transparent bg-clip-text bg-gradient-to-r from-primary via-secondary to-accent animate-plasma tracking-tighter uppercase">สสจ.มุกดาหาร</span>
-                  <span className="text-[7px] font-bold text-white/40 uppercase tracking-[0.4em] leading-none mt-1">Intelligence Unit Portal</span>
+                  <span className="font-black text-2xl leading-none text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-blue-500 to-emerald-400 animate-plasma-vivid tracking-tighter uppercase">สสจ.มุกดาหาร</span>
+                  <span className="text-[7px] font-black text-white/40 uppercase tracking-[0.6em] leading-none mt-1">Intelligence Division</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-8">
-                <nav className="flex items-center gap-2 bg-white/5 p-1 rounded-full border border-white/10 backdrop-blur-3xl">
+                <nav className="flex items-center gap-2 bg-white/5 p-1 rounded-full border border-white/5 backdrop-blur-3xl shadow-inner">
                   <NavItem to="/playground">Playground</NavItem>
                   {isLoggedIn && (
                     <>
@@ -73,9 +74,9 @@ function App() {
                   )}
                 </nav>
                 {isLoggedIn ? (
-                    <Button onClick={() => { localStorage.removeItem('admin_token'); setIsLoggedIn(false); window.location.href='/login'; }} variant="ghost" size="sm" className="rounded-full px-5 font-black uppercase tracking-widest text-[9px] text-destructive hover:bg-destructive/10 border border-destructive/20 h-8">Logout</Button>
+                    <Button onClick={() => { localStorage.removeItem('admin_token'); setIsLoggedIn(false); window.location.href='/login'; }} variant="ghost" size="sm" className="rounded-full px-6 bg-red-600/10 text-red-500 border border-red-500/20 font-black uppercase text-[9px] hover:bg-red-600 hover:text-white transition-all h-9">Logout</Button>
                 ) : (
-                    <NavLink to="/login"><Button variant="ghost" size="sm" className="rounded-full px-5 font-black uppercase tracking-widest text-[9px] text-primary hover:bg-primary/10 border border-primary/20 h-8">Admin</Button></NavLink>
+                    <NavLink to="/login"><Button variant="ghost" size="sm" className="rounded-full px-6 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-black uppercase text-[9px] hover:bg-emerald-500 hover:text-white transition-all h-9">Admin Access</Button></NavLink>
                 )}
               </div>
             </div>
@@ -92,7 +93,7 @@ function App() {
             </Routes>
           </main>
           
-          <div className="fixed bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary via-secondary to-accent opacity-50 shadow-[0_0_20px_var(--primary)]" />
+          <div className="fixed bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-500 via-blue-600 to-purple-600 opacity-60 shadow-[0_0_30px_#10b981]" />
         </div>
       </BrowserRouter>
     </QueryClientProvider>
