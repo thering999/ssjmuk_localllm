@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -42,7 +42,6 @@ function App() {
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <div className="min-h-screen relative overflow-hidden bg-zinc-950 text-white selection:bg-primary/40">
           
-          {/* SUPREME SUPERNOVA BACKGROUND */}
           <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
              <div className="absolute top-[-20%] left-[-10%] size-[100%] rounded-full bg-primary/20 blur-[150px] animate-aura-vivid" />
              <div className="absolute bottom-[-30%] right-[-10%] size-[100%] rounded-full bg-secondary/30 blur-[180px] animate-aura-vivid" style={{ animationDelay: '-5s' }} />
