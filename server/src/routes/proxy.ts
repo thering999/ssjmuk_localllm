@@ -3,8 +3,8 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import type { ChatMessage } from '@freellmapi/shared/types.js';
-import { routeRequest, recordRateLimitHit, recordSuccess, type RouteResult } from '../services/router.js';
-import { recordRequest, recordTokens, setCooldown } from '../services/ratelimit.js';
+import { routeRequest, routeEmbedding, recordRateLimitHit, recordSuccess, type RouteResult } from '../services/router.js';
+import { recordRequest, recordTokens, setCooldown, recordLatency } from '../services/ratelimit.js';
 import { getDb, getUnifiedApiKey } from '../db/index.js';
 
 export const proxyRouter = Router();
@@ -108,6 +108,73 @@ proxyRouter.get('/models', (_req: Request, res: Response) => {
   });
 });
 
+// OpenAI-compatible /embeddings endpoint
+proxyRouter.post('/embeddings', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: { message: 'Missing or malformed Authorization header' } });
+  }
+
+  const providedKey = authHeader.slice(7);
+  const expectedKey = getUnifiedApiKey();
+  if (!timingSafeStringEqual(providedKey, expectedKey)) {
+    return res.status(401).json({ error: { message: 'Invalid API key' } });
+  }
+
+  const body = req.body;
+  const requestedModel = isAutoModel(body.model) ? undefined : body.model;
+  const input = body.input;
+
+  if (!input) {
+    return res.status(400).json({ error: { message: "Missing required 'input' field" } });
+  }
+
+  const skipKeys = new Set<string>();
+  let lastError: Error | null = null;
+
+  // Max 5 attempts for embeddings (usually less needed as they are simpler)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let route: RouteResult;
+    try {
+      route = routeEmbedding(requestedModel, skipKeys);
+    } catch (err: any) {
+      return res.status(err.status || 500).json({ error: { message: err.message } });
+    }
+
+    const startTime = Date.now();
+    try {
+      const result = await route.provider.embeddings(route.apiKey, input, route.modelId);
+      const latency = Date.now() - startTime;
+
+      // Log success
+      recordSuccess(route.modelDbId);
+      recordRequest(route.platform, route.modelId, route.keyId);
+      recordLatency(route.platform, route.modelId, route.keyId, latency);
+      logRequest(route.platform, route.modelId, 'success', 0, 0, latency, null);
+
+      return res.json(result);
+    } catch (err: any) {
+      lastError = err;
+      const latency = Date.now() - startTime;
+
+      // Log failure
+      logRequest(route.platform, route.modelId, 'error', 0, 0, latency, err.message);
+
+      if (err.message.includes('rate limit') || err.message.includes('429')) {
+        recordRateLimitHit(route.modelDbId);
+        setCooldown(route.platform, route.modelId, route.keyId);
+        skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
+        continue;
+      }
+
+      // Other errors might be permanent for this key/model, skip it
+      skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
+    }
+  }
+
+  res.status(500).json({ error: { message: lastError?.message || 'Failed to process embedding request after multiple attempts' } });
+});
+
 const MAX_RETRIES = 20;
 
 const toolCallSchema = z.object({
@@ -120,25 +187,47 @@ const toolCallSchema = z.object({
   thought_signature: z.string().optional(),
 });
 
+const contentPartSchema = z.union([
+  z.object({
+    type: z.literal('text'),
+    text: z.string(),
+  }),
+  z.object({
+    type: z.literal('image_url'),
+    image_url: z.object({
+      url: z.string(),
+      detail: z.enum(['auto', 'low', 'high']).optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal('file'),
+    file: z.object({
+      name: z.string(),
+      mimeType: z.string(),
+      data: z.string(),
+    }),
+  }),
+]);
+
 const systemMessageSchema = z.object({
   role: z.literal('system'),
-  content: z.string(),
+  content: z.union([z.string(), z.array(contentPartSchema)]),
   name: z.string().optional(),
 });
 
 const userMessageSchema = z.object({
   role: z.literal('user'),
-  content: z.string(),
+  content: z.union([z.string(), z.array(contentPartSchema)]),
   name: z.string().optional(),
 });
 
 const assistantMessageSchema = z.object({
   role: z.literal('assistant'),
-  content: z.string().nullable().optional(),
+  content: z.union([z.string(), z.array(contentPartSchema)]).nullable().optional(),
   name: z.string().optional(),
   tool_calls: z.array(toolCallSchema).optional(),
 }).refine((msg) => {
-  const hasContent = typeof msg.content === 'string' && msg.content.length > 0;
+  const hasContent = msg.content != null && (typeof msg.content === 'string' ? msg.content.length > 0 : msg.content.length > 0);
   const hasToolCalls = (msg.tool_calls?.length ?? 0) > 0;
   return hasContent || hasToolCalls;
 }, {
@@ -147,7 +236,7 @@ const assistantMessageSchema = z.object({
 
 const toolMessageSchema = z.object({
   role: z.literal('tool'),
-  content: z.string(),
+  content: z.union([z.string(), z.array(contentPartSchema)]),
   tool_call_id: z.string().min(1),
   name: z.string().optional(),
 });
@@ -202,9 +291,6 @@ function isRetryableError(err: any): boolean {
 proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
   const start = Date.now();
 
-  // Authenticate with the unified API key for every proxy request, including
-  // loopback callers. Browser pages can reach localhost, so socket locality is
-  // not a reliable authorization boundary.
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   const unifiedKey = getUnifiedApiKey();
   if (!token || !timingSafeStringEqual(token, unifiedKey)) {
@@ -245,39 +331,60 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
     if (m.role === 'tool') {
       return {
         role: 'tool',
-        content: m.content,
+        content: m.content as any,
         tool_call_id: m.tool_call_id,
         ...(m.name ? { name: m.name } : {}),
       };
     }
 
     return {
-      role: m.role,
-      content: m.content,
+      role: m.role as any,
+      content: m.content as any,
       ...(m.name ? { name: m.name } : {}),
     };
   });
 
-  // Token estimation is intentionally a heuristic (~4 chars per token). Used
-  // for routing decisions (skip a model whose budget is too small) and for
-  // streaming bookkeeping where the provider doesn't echo a final usage count.
-  // Non-streaming requests reconcile against the provider's real `usage` block
-  // (see line ~340). Streaming will drift from real consumption — accepted
-  // tradeoff because per-request usage isn't always returned mid-stream.
-  const estimatedInputTokens = messages.reduce((sum, m) => {
+  // --- Smart Context Trimming ---
+  // Keep system messages + last 10 messages to save tokens and speed up response
+  const systemMessages = messages.filter(m => m.role === 'system');
+  const otherMessages = messages.filter(m => m.role !== 'system');
+  const trimmedMessages = [
+    ...systemMessages,
+    ...otherMessages.slice(-10)
+  ];
+
+  const hasImages = trimmedMessages.some(m =>
+    Array.isArray(m.content) && m.content.some(p => p.type === 'image_url' || p.type === 'file')
+  );
+
+  // --- Tiny Task Detection ---
+  const lastUserMsg = [...trimmedMessages].reverse().find(m => m.role === 'user');
+  const isTinyTask = !hasImages && lastUserMsg && typeof lastUserMsg.content === 'string' && lastUserMsg.content.length < 50;
+
+  // --- Fast Semantic Cache Check ---
+  let cacheKey = '';
+  if (!stream && !hasImages && lastUserMsg && typeof lastUserMsg.content === 'string') {
+    cacheKey = crypto.createHash('sha256').update(JSON.stringify(trimmedMessages)).digest('hex');
+    const db = getDb();
+    const cached = db.prepare('SELECT response_json FROM semantic_cache WHERE query_hash = ?').get(cacheKey) as { response_json: string } | undefined;
+
+    if (cached) {
+      const result = JSON.parse(cached.response_json);
+      result._cached = true;
+      res.setHeader('X-Cache-Hit', 'true');
+      return res.json(result);
+    }
+  }
+
+  const estimatedInputTokens = trimmedMessages.reduce((sum, m) => {
     if (typeof m.content !== 'string') return sum;
     return sum + Math.ceil(m.content.length / 4);
   }, 0);
   const estimatedTotal = estimatedInputTokens + (max_tokens ?? 1000);
 
-  // Explicit `model` field pins routing. If the catalog has no enabled row
-  // matching the requested id, return 400 — silently auto-routing to a
-  // different model would be surprising to OpenAI-compatible clients.
-  // Sticky-session is the fallback when no `model` field was sent at all.
   let preferredModel: number | undefined;
   if (isAutoModel(requestedModel)) {
-    // Explicit "auto" → behave exactly like an omitted model field.
-    preferredModel = getStickyModel(messages);
+    preferredModel = getStickyModel(trimmedMessages);
   } else if (requestedModel) {
     const db = getDb();
     const enabled = db.prepare('SELECT id FROM models WHERE model_id = ? AND enabled = 1').get(requestedModel) as { id: number } | undefined;
@@ -288,7 +395,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
       const reason = disabled ? 'is disabled' : 'is not in the catalog';
       res.status(400).json({
         error: {
-          message: `Model '${requestedModel}' ${reason}. Use 'auto' (or omit the 'model' field) to auto-route, or call /v1/models for the available list.`,
+          message: `Model '${requestedModel}' ${reason}. Use 'auto' (or omit the 'model' field) to auto-route.`,
           type: 'invalid_request_error',
           code: 'model_not_found',
         },
@@ -296,25 +403,20 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
       return;
     }
   } else {
-    preferredModel = getStickyModel(messages);
+    preferredModel = getStickyModel(trimmedMessages);
   }
 
-  // Retry loop: on 429/rate limit, skip that model+key and try the next one
   const skipKeys = new Set<string>();
   let lastError: any = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     let route: RouteResult;
     try {
-      route = routeRequest(estimatedTotal, skipKeys.size > 0 ? skipKeys : undefined, preferredModel);
+      route = routeRequest(estimatedTotal, skipKeys.size > 0 ? skipKeys : undefined, preferredModel, hasImages, isTinyTask);
     } catch (err: any) {
-      // No more models available
       if (lastError) {
         res.status(429).json({
-          error: {
-            message: `All models rate-limited. Last error: ${lastError.message}`,
-            type: 'rate_limit_error',
-          },
+          error: { message: `All models rate-limited. Last error: ${lastError.message}`, type: 'rate_limit_error' },
         });
       } else {
         res.status(err.status ?? 503).json({
@@ -328,14 +430,11 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
 
     try {
       if (stream) {
-        // Lazy header set: pre-stream errors stay retryable (no headers sent yet);
-        // mid-stream errors emit an `error` SSE frame so the client sees a real signal
-        // instead of a silently truncated stream.
         let totalOutputTokens = 0;
         let streamStarted = false;
         try {
           const gen = route.provider.streamChatCompletion(
-            route.apiKey, messages, route.modelId,
+            route.apiKey, trimmedMessages, route.modelId,
             { temperature, max_tokens, top_p, tools, tool_choice, parallel_tool_calls },
           );
 
@@ -354,55 +453,58 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
           }
 
           if (!streamStarted) {
-            // Upstream returned no chunks — emit minimal successful stream.
             res.setHeader('Content-Type', 'text/event-stream');
             res.setHeader('X-Routed-Via', `${route.platform}/${route.modelId}`);
           }
           res.write('data: [DONE]\n\n');
           res.end();
 
+          const latency = Date.now() - start;
           recordTokens(route.platform, route.modelId, route.keyId, estimatedInputTokens + totalOutputTokens);
           recordSuccess(route.modelDbId);
-          setStickyModel(messages, route.modelDbId);
-          logRequest(route.platform, route.modelId, 'success', estimatedInputTokens, totalOutputTokens, Date.now() - start, null);
+          recordLatency(route.platform, route.modelId, route.keyId, latency);
+          setStickyModel(trimmedMessages, route.modelDbId);
+          logRequest(route.platform, route.modelId, 'success', estimatedInputTokens, totalOutputTokens, latency, null);
           return;
         } catch (streamErr: any) {
           if (streamStarted) {
-            // Mid-stream error — finish the SSE response cleanly instead of leaving
-            // the client hanging or letting Express's default handler take over.
-            // Full upstream message goes to the log; the client sees a generic
-            // message so we don't leak provider internals into a partial stream.
             console.error(`[Proxy] Mid-stream error from ${route.displayName}:`, streamErr.message);
             const payload = { error: { message: `Provider error (${route.displayName}): stream interrupted`, type: 'stream_error' } };
-            try { res.write(`data: ${JSON.stringify(payload)}\n\n`); } catch { /* socket gone */ }
-            try { res.write('data: [DONE]\n\n'); res.end(); } catch { /* socket gone */ }
+            try { res.write(`data: ${JSON.stringify(payload)}\n\n`); } catch { }
+            try { res.write('data: [DONE]\n\n'); res.end(); } catch { }
             logRequest(route.platform, route.modelId, 'error', estimatedInputTokens, totalOutputTokens, Date.now() - start, streamErr.message);
             return;
           }
-          // Pre-stream error — bubble to outer retry/502 handler.
           throw streamErr;
         }
       } else {
         const result = await route.provider.chatCompletion(
-          route.apiKey, messages, route.modelId,
+          route.apiKey, trimmedMessages, route.modelId,
           { temperature, max_tokens, top_p, tools, tool_choice, parallel_tool_calls },
         );
 
+        const latency = Date.now() - start;
         const totalTokens = result.usage?.total_tokens ?? 0;
         recordTokens(route.platform, route.modelId, route.keyId, totalTokens);
         recordSuccess(route.modelDbId);
-        setStickyModel(messages, route.modelDbId);
+        recordLatency(route.platform, route.modelId, route.keyId, latency);
+        setStickyModel(trimmedMessages, route.modelDbId);
 
         res.setHeader('X-Routed-Via', `${route.platform}/${route.modelId}`);
         if (attempt > 0) res.setHeader('X-Fallback-Attempts', String(attempt));
         res.json(result);
 
-        logRequest(
-          route.platform, route.modelId, 'success',
-          result.usage?.prompt_tokens ?? 0,
-          result.usage?.completion_tokens ?? 0,
-          Date.now() - start, null,
-        );
+        if (cacheKey) {
+          try {
+            const db = getDb();
+            db.prepare('INSERT OR IGNORE INTO semantic_cache (query_hash, query_text, response_json, model_id, platform) VALUES (?, ?, ?, ?, ?)')
+              .run(cacheKey, typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '', JSON.stringify(result), route.modelId, route.platform);
+          } catch (cacheErr) {
+            console.error('Failed to save to cache:', cacheErr);
+          }
+        }
+
+        logRequest(route.platform, route.modelId, 'success', result.usage?.prompt_tokens ?? 0, result.usage?.completion_tokens ?? 0, latency, null);
         return;
       }
     } catch (err: any) {
@@ -410,7 +512,6 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
       logRequest(route.platform, route.modelId, 'error', estimatedInputTokens, 0, latency, err.message);
 
       if (isRetryableError(err)) {
-        // Put this model+key on cooldown and try the next one
         const skipId = `${route.platform}:${route.modelId}:${route.keyId}`;
         skipKeys.add(skipId);
         setCooldown(route.platform, route.modelId, route.keyId, 120_000);
@@ -420,23 +521,15 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         continue;
       }
 
-      // Non-retryable error (auth, 4xx, etc.): don't retry
       res.status(502).json({
-        error: {
-          message: `Provider error (${route.displayName}): ${err.message}`,
-          type: 'provider_error',
-        },
+        error: { message: `Provider error (${route.displayName}): ${err.message}`, type: 'provider_error' },
       });
       return;
     }
   }
 
-  // Exhausted all retries
   res.status(429).json({
-    error: {
-      message: `All models rate-limited after ${MAX_RETRIES} attempts. Last: ${lastError?.message}`,
-      type: 'rate_limit_error',
-    },
+    error: { message: `All models rate-limited after ${MAX_RETRIES} attempts. Last: ${lastError?.message}`, type: 'rate_limit_error' },
   });
 });
 

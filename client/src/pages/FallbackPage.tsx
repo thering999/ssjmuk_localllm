@@ -77,8 +77,6 @@ function TokenUsageBar({ data }: { data: TokenUsageData }) {
   const remaining = Math.max(0, totalBudget - totalUsed)
   const remainingPct = totalBudget > 0 ? Math.round((remaining / totalBudget) * 100) : 0
 
-  // Scale each model's segment proportionally so the colored portion of the
-  // bar sums to `remaining`; the grey tail represents what's been used.
   const modelsWithWidth = models.map(m => ({
     ...m,
     remainingTokens: totalBudget > 0 ? (m.budget / totalBudget) * remaining : 0,
@@ -87,46 +85,50 @@ function TokenUsageBar({ data }: { data: TokenUsageData }) {
   const usedPct = totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0
 
   return (
-    <section className="rounded-lg border bg-card p-5">
-      <div className="flex items-baseline justify-between mb-3">
-        <h2 className="text-sm font-medium">Monthly token budget</h2>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          <span className="text-foreground font-medium">{formatTokens(remaining)}</span> remaining
-          <span className="mx-1.5">·</span>
-          {remainingPct}% of {formatTokens(totalBudget)}
+    <section className="rounded-[2.5rem] border border-white/40 bg-white/40 dark:bg-black/20 backdrop-blur-3xl p-8 shadow-2xl overflow-hidden relative">
+      <div className="absolute top-0 right-0 size-32 bg-primary/10 blur-3xl" />
+      <div className="flex items-baseline justify-between mb-6 relative z-10">
+        <h2 className="text-sm font-black uppercase tracking-widest text-primary">Monthly Token Health</h2>
+        <span className="text-xs font-bold tabular-nums">
+          <span className="text-primary">{formatTokens(remaining)}</span> <span className="opacity-50 tracking-tighter">Remaining</span>
+          <span className="mx-2 opacity-20">|</span>
+          <span className="text-secondary">{remainingPct}% Efficiency</span>
         </span>
       </div>
 
-      <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
+      <div className="flex h-4 rounded-full overflow-hidden bg-white/40 dark:bg-white/5 border border-white/20 p-0.5 relative z-10 shadow-inner">
         {modelsWithWidth.map((m, i) => (
           <div
             key={i}
-            title={`${m.displayName} (${m.platform}) — ${formatTokens(m.remainingTokens)} remaining`}
+            title={`${m.displayName} (${m.platform})`}
+            className="rounded-full h-full mx-[1px] transition-all hover:scale-y-125"
             style={{
               width: `${m.widthPct}%`,
-              backgroundColor: platformColors[m.platform] ?? '#94a3b8',
+              backgroundColor: platformColors[m.platform] ?? 'var(--primary)',
+              boxShadow: `0 0 10px ${platformColors[m.platform] ?? 'var(--primary)'}40`
             }}
           />
         ))}
         {totalUsed > 0 && (
           <div
-            title={`Used — ${formatTokens(totalUsed)}`}
-            className="bg-muted-foreground/30"
+            title={`Used: ${formatTokens(totalUsed)}`}
+            className="bg-white/10 dark:bg-white/5 h-full rounded-full"
             style={{ width: `${usedPct}%` }}
           />
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-1.5 text-xs tabular-nums">
+      <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 relative z-10">
         {modelsWithWidth.map((m, i) => (
-          <div key={i} className="flex items-center gap-2 min-w-0">
+          <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-white/40 dark:bg-white/5 border border-white/20 hover:bg-white/60 transition-colors group">
             <span
-              className="size-2 rounded-sm flex-shrink-0"
-              style={{ backgroundColor: platformColors[m.platform] ?? '#94a3b8' }}
+              className="size-3 rounded-full flex-shrink-0 shadow-lg group-hover:scale-125 transition-transform"
+              style={{ backgroundColor: platformColors[m.platform] ?? 'var(--primary)' }}
             />
-            <span className="truncate">{m.displayName}</span>
-            <span className="flex-1" />
-            <span className="font-mono text-muted-foreground">{formatTokens(m.remainingTokens)}</span>
+            <div className="flex flex-col min-w-0">
+               <span className="text-[10px] font-black uppercase truncate tracking-tight">{m.displayName}</span>
+               <span className="text-[9px] font-bold opacity-40 tabular-nums">{formatTokens(m.remainingTokens)}</span>
+            </div>
           </div>
         ))}
       </div>
@@ -156,43 +158,48 @@ function SortableModelRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group flex items-center gap-3 px-4 py-3 bg-card ${isDragging ? 'opacity-50' : ''} ${entry.enabled ? '' : 'opacity-50'}`}
+      className={`group flex items-center gap-6 px-8 py-5 bg-white/40 dark:bg-black/10 backdrop-blur-md border border-white/20 hover:bg-white/60 dark:hover:bg-white/5 transition-all ${isDragging ? 'z-50 scale-105 shadow-2xl opacity-100 ring-2 ring-primary/50' : ''} ${entry.enabled ? '' : 'opacity-40 grayscale'}`}
     >
       <button
         {...attributes}
         {...listeners}
-        className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-foreground transition-colors"
-        aria-label="Drag to reorder"
+        className="cursor-grab active:cursor-grabbing text-primary/40 hover:text-primary transition-colors flex-shrink-0"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-          <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-          <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+          <line x1="8" y1="9" x2="16" y2="9" /><line x1="8" y1="15" x2="16" y2="15" />
         </svg>
       </button>
-      <span className="text-xs font-mono text-muted-foreground w-5 tabular-nums">{index + 1}</span>
+      
+      <div className="size-10 rounded-2xl bg-white dark:bg-zinc-900 shadow-lg flex items-center justify-center font-black text-xs text-primary flex-shrink-0 border border-white/40">
+        {index + 1}
+      </div>
+
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm">{entry.displayName}</span>
-          <span className="text-xs text-muted-foreground">{entry.platform}</span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="font-black text-base tracking-tight text-primary">{entry.displayName}</span>
+          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">{entry.platform}</span>
           {entry.penalty > 0 && (
-            <span className="text-xs text-amber-600 dark:text-amber-400">
-              −{entry.penalty} penalty
+            <span className="text-[10px] font-black uppercase text-rose-500 animate-pulse">
+              Penalty: −{entry.penalty}
             </span>
           )}
         </div>
-        <div className="flex gap-3 mt-0.5 text-xs text-muted-foreground tabular-nums">
-          <span>Intel #{entry.intelligenceRank}</span>
-          <span>Speed #{entry.speedRank}</span>
-          {entry.rpmLimit && <span>{entry.rpmLimit} rpm</span>}
-          {entry.rpdLimit && <span>{entry.rpdLimit} rpd</span>}
-          <span>{entry.monthlyTokenBudget} tok/mo</span>
+        <div className="flex gap-4 mt-1 text-[10px] font-bold uppercase tracking-widest opacity-40">
+          <span className="flex items-center gap-1.5"><div className="size-1.5 rounded-full bg-secondary" /> Intelligence #{entry.intelligenceRank}</span>
+          <span className="flex items-center gap-1.5"><div className="size-1.5 rounded-full bg-emerald-500" /> Speed #{entry.speedRank}</span>
+          {entry.rpmLimit && <span>{entry.rpmLimit} RPM</span>}
+          <span>{entry.monthlyTokenBudget} Tokens/Month</span>
         </div>
       </div>
-      <Switch
-        checked={entry.enabled}
-        onCheckedChange={(checked) => onToggle(entry.modelDbId, checked)}
-      />
+
+      <div className="flex items-center gap-4">
+         <span className="text-[9px] font-black uppercase tracking-widest opacity-30">{entry.enabled ? 'Active' : 'Disabled'}</span>
+         <Switch
+            checked={entry.enabled}
+            onCheckedChange={(checked) => onToggle(entry.modelDbId, checked)}
+            className="data-[state=checked]:bg-primary"
+         />
+      </div>
     </div>
   )
 }
@@ -273,41 +280,41 @@ export default function FallbackPage() {
   const hasChanges = localEntries !== null
 
   return (
-    <div>
+    <div className="space-y-12 animate-in fade-in duration-1000 max-w-6xl mx-auto pb-20">
       <PageHeader
-        title="Fallback chain"
-        description="Drag to reorder. Requests try models top-to-bottom until one succeeds."
+        title="Intelligence Fallback Chain"
+        description="ลากเพื่อจัดลำดับการทำงานของ AI ระบบจะลองไล่จากบนลงล่างจนกว่าจะสำเร็จ"
         actions={
-          <>
-            <Button variant="outline" size="sm" onClick={() => sortMutation.mutate('intelligence')} disabled={sortMutation.isPending}>
-              Sort by intelligence
+          <div className="flex gap-1.5 bg-white/40 dark:bg-black/20 p-1.5 rounded-full border border-white/40 shadow-xl">
+            <Button variant="ghost" size="sm" className="rounded-full px-4 font-black uppercase text-[9px] tracking-widest hover:bg-primary/10 text-primary" onClick={() => sortMutation.mutate('intelligence')} disabled={sortMutation.isPending}>
+              Intel High
             </Button>
-            <Button variant="outline" size="sm" onClick={() => sortMutation.mutate('speed')} disabled={sortMutation.isPending}>
-              Sort by speed
+            <Button variant="ghost" size="sm" className="rounded-full px-4 font-black uppercase text-[9px] tracking-widest hover:bg-emerald-500/10 text-emerald-600" onClick={() => sortMutation.mutate('speed')} disabled={sortMutation.isPending}>
+              Speed High
             </Button>
-            <Button variant="outline" size="sm" onClick={() => sortMutation.mutate('budget')} disabled={sortMutation.isPending}>
-              Sort by budget
+            <Button variant="ghost" size="sm" className="rounded-full px-4 font-black uppercase text-[9px] tracking-widest hover:bg-secondary/10 text-secondary" onClick={() => sortMutation.mutate('budget')} disabled={sortMutation.isPending}>
+              Budget High
             </Button>
-          </>
+          </div>
         }
       />
 
-      <div className="space-y-6">
+      <div className="space-y-10">
         {tokenUsage && tokenUsage.totalBudget > 0 && (
           <TokenUsageBar data={tokenUsage} />
         )}
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <div className="h-60 flex items-center justify-center font-black uppercase tracking-widest animate-pulse">Syncing Chain...</div>
         ) : displayEntries.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              No models available. Add API keys on the <a href="/keys" className="underline text-foreground">Keys page</a> first.
+          <div className="rounded-[2.5rem] border-4 border-dashed border-white/40 p-20 text-center bg-white/20">
+            <p className="text-lg font-black text-muted-foreground uppercase tracking-widest opacity-40">
+              No Models Ready for Routing
             </p>
           </div>
         ) : (
-          <>
-            <div className="rounded-lg border divide-y overflow-hidden">
+          <div className="space-y-6">
+            <div className="rounded-[2.5rem] border border-white/40 bg-white/20 dark:bg-black/20 backdrop-blur-3xl divide-y divide-white/20 overflow-hidden shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)]">
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
@@ -330,22 +337,26 @@ export default function FallbackPage() {
             </div>
 
             {hasChanges && (
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setLocalEntries(null)}>
-                  Discard
+              <div className="flex justify-center gap-4 pt-4 animate-in slide-in-from-bottom-4">
+                <Button variant="ghost" size="lg" className="rounded-full px-8 font-black uppercase tracking-widest text-xs hover:bg-white/20" onClick={() => setLocalEntries(null)}>
+                  Cancel Changes
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending}>
-                  {saveMutation.isPending ? 'Saving…' : 'Save order'}
+                <Button size="lg" className="rounded-full px-12 font-black uppercase tracking-widest text-xs bg-primary text-white shadow-2xl shadow-primary/30" onClick={handleSave} disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? 'Updating...' : 'Deploy Chain Order'}
                 </Button>
               </div>
             )}
 
             {unconfiguredPlatforms.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Hidden (no keys): {unconfiguredPlatforms.join(', ')}
-              </p>
+              <div className="flex items-center justify-center gap-4 opacity-30 mt-10">
+                 <div className="h-px w-20 bg-primary/50" />
+                 <p className="text-[9px] font-black uppercase tracking-[0.4em]">
+                   Inactive Platforms: {unconfiguredPlatforms.join(' · ')}
+                 </p>
+                 <div className="h-px w-20 bg-primary/50" />
+              </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

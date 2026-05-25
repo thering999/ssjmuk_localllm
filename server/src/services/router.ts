@@ -1,7 +1,7 @@
 import { getDb } from '../db/index.js';
 import { getProvider } from '../providers/index.js';
 import { decrypt } from '../lib/crypto.js';
-import { canMakeRequest, canUseTokens, isOnCooldown } from './ratelimit.js';
+import { canMakeRequest, canUseTokens, isOnCooldown, getAverageLatency } from './ratelimit.js';
 import type { BaseProvider } from '../providers/base.js';
 
 interface ModelRow {
@@ -13,6 +13,8 @@ interface ModelRow {
   rpd_limit: number | null;
   tpm_limit: number | null;
   tpd_limit: number | null;
+  is_embedding: number;
+  supports_vision: number;
 }
 
 interface KeyRow {
@@ -41,7 +43,7 @@ export interface RouteResult {
   displayName: string;
 }
 
-// Round-robin index per platform
+// Round-robin index per platform (kept for embeddings for now)
 const roundRobinIndex = new Map<string, number>();
 
 // ── Dynamic priority: track 429s per model and demote accordingly ──
@@ -120,6 +122,84 @@ export function getAllPenalties(): Array<{ modelDbId: number; count: number; pen
 }
 
 /**
+ * Route an embedding request.
+ * For embeddings, we usually want a specific model.
+ * If no model is specified, we pick the first available embedding model.
+ */
+export function routeEmbedding(requestedModel?: string, skipKeys?: Set<string>): RouteResult {
+  const db = getDb();
+
+  // Find all available embedding models
+  let query = 'SELECT * FROM models WHERE is_embedding = 1 AND enabled = 1';
+  const params: any[] = [];
+  
+  if (requestedModel) {
+    query += ' AND model_id = ?';
+    params.push(requestedModel);
+  }
+
+  const models = db.prepare(query).all(...params) as ModelRow[];
+
+  if (models.length === 0) {
+    if (requestedModel) {
+      throw new Error(`Embedding model '${requestedModel}' not found or not enabled.`);
+    } else {
+      throw new Error('No embedding models found. Please enable at least one.');
+    }
+  }
+
+  // Try each model until one works
+  for (const model of models) {
+    const provider = getProvider(model.platform as any);
+    if (!provider) continue;
+
+    const keys = db.prepare(
+      'SELECT * FROM api_keys WHERE platform = ? AND enabled = 1 AND status != ?'
+    ).all(model.platform, 'invalid') as KeyRow[];
+
+    if (keys.length === 0) continue;
+
+    const limits = {
+      rpm: model.rpm_limit,
+      rpd: model.rpd_limit,
+      tpm: model.tpm_limit,
+      tpd: model.tpd_limit,
+    };
+
+    const rrKey = `emb:${model.platform}:${model.model_id}`;
+    let idx = roundRobinIndex.get(rrKey) ?? 0;
+
+    for (let attempt = 0; attempt < keys.length; attempt++) {
+      const key = keys[idx % keys.length];
+      idx++;
+
+      const skipId = `${model.platform}:${model.model_id}:${key.id}`;
+      if (skipKeys?.has(skipId)) continue;
+
+      if (isOnCooldown(model.platform, model.model_id, key.id)) continue;
+      if (!canMakeRequest(model.platform, model.model_id, key.id, limits)) continue;
+      
+      roundRobinIndex.set(rrKey, idx);
+      const decryptedKey = decrypt(key.encrypted_key, key.iv, key.auth_tag);
+
+      return {
+        provider,
+        modelId: model.model_id,
+        modelDbId: model.id,
+        apiKey: decryptedKey,
+        keyId: key.id,
+        platform: model.platform,
+        displayName: model.display_name,
+      };
+    }
+  }
+
+  const err = new Error('All embedding models exhausted or rate-limited.') as any;
+  err.status = 429;
+  throw err;
+}
+
+/**
  * Route a request to the best available model.
  * Models are sorted by (base_priority + rate_limit_penalty) so frequently
  * rate-limited models automatically sink below working ones.
@@ -130,8 +210,16 @@ export function getAllPenalties(): Array<{ modelDbId: number; count: number; pen
  * @param estimatedTokens - estimated total tokens for rate limit check
  * @param skipKeys - set of "platform:modelId:keyId" to skip (failed on this request)
  * @param preferredModelDbId - try this model first (sticky session)
+ * @param requireVision - if true, only models that support vision will be considered
+ * @param isTinyTask - if true, prioritize extremely fast/small models
  */
-export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, preferredModelDbId?: number): RouteResult {
+export function routeRequest(
+  estimatedTokens = 1000, 
+  skipKeys?: Set<string>, 
+  preferredModelDbId?: number,
+  requireVision = false,
+  isTinyTask = false
+): RouteResult {
   const db = getDb();
 
   // Get fallback chain ordered by priority
@@ -147,8 +235,20 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     effectivePriority: entry.priority + getPenalty(entry.model_db_id),
   })).sort((a, b) => a.effectivePriority - b.effectivePriority);
 
-  // Sticky session: move preferred model to front of chain
-  if (preferredModelDbId) {
+  // If tiny task, try to find a tiny model and move it to the front
+  if (isTinyTask && !requireVision) {
+    const tinyModelIdx = sortedChain.findIndex(entry => {
+      const m = db.prepare("SELECT size_label FROM models WHERE id = ?").get(entry.model_db_id) as { size_label: string };
+      return m?.size_label === 'Small';
+    });
+    if (tinyModelIdx > 0) {
+      const [tiny] = sortedChain.splice(tinyModelIdx, 1);
+      sortedChain.unshift(tiny);
+    }
+  }
+
+  // Sticky session: move preferred model to front of chain (unless tiny task overrides it)
+  if (preferredModelDbId && !isTinyTask) {
     const idx = sortedChain.findIndex(e => e.model_db_id === preferredModelDbId);
     if (idx > 0) {
       const [preferred] = sortedChain.splice(idx, 1);
@@ -160,21 +260,25 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     if (!entry.enabled) continue;
 
     // Get model details
-    const model = db.prepare('SELECT * FROM models WHERE id = ? AND enabled = 1').get(entry.model_db_id) as ModelRow | undefined;
+    let query = 'SELECT * FROM models WHERE id = ? AND enabled = 1';
+    const params: any[] = [entry.model_db_id];
+    
+    if (requireVision) {
+      query += ' AND supports_vision = 1';
+    }
+
+    const model = db.prepare(query).get(...params) as ModelRow | undefined;
     if (!model) continue;
 
-    // Check if we have a provider for this platform
     const provider = getProvider(model.platform as any);
     if (!provider) continue;
 
-    // Get all healthy, enabled keys for this platform
     const keys = db.prepare(
       'SELECT * FROM api_keys WHERE platform = ? AND enabled = 1 AND status != ?'
     ).all(model.platform, 'invalid') as KeyRow[];
 
     if (keys.length === 0) continue;
 
-    // Get limits once for this model
     const limits = {
       rpm: model.rpm_limit,
       rpd: model.rpd_limit,
@@ -182,25 +286,30 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       tpd: model.tpd_limit,
     };
 
-    // Try all keys for this model before giving up on it
-    const rrKey = `${model.platform}:${model.model_id}`;
-    let idx = roundRobinIndex.get(rrKey) ?? 0;
+    // --- Dynamic Latency Routing ---
+    // Instead of simple round-robin, sort keys by average latency (fastest first)
+    const sortedKeys = keys
+      .map(k => ({ 
+        ...k, 
+        avgLatency: getAverageLatency(model.platform, model.model_id, k.id) 
+      }))
+      .sort((a, b) => {
+        // Unknown latency (0) comes first to give new keys a chance
+        if (a.avgLatency === 0 && b.avgLatency === 0) return 0;
+        if (a.avgLatency === 0) return -1;
+        if (b.avgLatency === 0) return 1;
+        return a.avgLatency - b.avgLatency;
+      });
 
-    for (let attempt = 0; attempt < keys.length; attempt++) {
-      const key = keys[idx % keys.length];
-      idx++;
-
+    for (const key of sortedKeys) {
       const skipId = `${model.platform}:${model.model_id}:${key.id}`;
       if (skipKeys?.has(skipId)) continue;
 
-      // Check cooldown (from previous 429s)
       if (isOnCooldown(model.platform, model.model_id, key.id)) continue;
 
       if (!canMakeRequest(model.platform, model.model_id, key.id, limits)) continue;
       if (!canUseTokens(model.platform, model.model_id, key.id, estimatedTokens, limits)) continue;
 
-      // We found a working key for this model!
-      roundRobinIndex.set(rrKey, idx);
       const decryptedKey = decrypt(key.encrypted_key, key.iv, key.auth_tag);
 
       return {
@@ -213,17 +322,9 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
         displayName: model.display_name,
       };
     }
-
-    // If we reach here, this specific model has NO available keys.
-    // Update round-robin index even if we failed so we don't get stuck.
-    roundRobinIndex.set(rrKey, idx);
-    
-    // We don't explicitly penalize the model here because the fact that we 
-    // couldn't find a key means we will naturally move to the next model 
-    // in the `sortedChain` for THIS specific request.
   }
 
-  const err = new Error('All models exhausted. Add more API keys or wait for rate limits to reset.') as any;
+  const err = new Error(requireVision ? 'No available models supporting vision. Please add Gemini API keys.' : 'All models exhausted. Add more API keys or wait for rate limits to reset.') as any;
   err.status = 429;
   throw err;
 }

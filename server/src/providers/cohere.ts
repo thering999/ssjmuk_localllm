@@ -2,6 +2,7 @@ import type {
   ChatMessage,
   ChatCompletionResponse,
   ChatCompletionChunk,
+  EmbeddingResponse,
 } from '@freellmapi/shared/types.js';
 import { BaseProvider, type CompletionOptions } from './base.js';
 
@@ -113,5 +114,30 @@ export class CohereProvider extends BaseProvider {
       headers: { 'Authorization': `Bearer ${apiKey}` },
     }, 10000);
     return res.status !== 401 && res.status !== 403;
+  }
+
+  async embeddings(
+    apiKey: string,
+    input: string | string[],
+    modelId: string,
+  ): Promise<EmbeddingResponse> {
+    const res = await this.fetchWithTimeout(`${API_BASE}/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelId,
+        input,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Cohere Embeddings error ${res.status}: ${(err as any).error?.message ?? res.statusText}`);
+    }
+
+    return await res.json() as EmbeddingResponse;
   }
 }

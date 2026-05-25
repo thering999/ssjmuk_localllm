@@ -2,6 +2,7 @@ import type {
   ChatMessage,
   ChatCompletionResponse,
   ChatCompletionChunk,
+  EmbeddingResponse,
 } from '@freellmapi/shared/types.js';
 import { BaseProvider, type CompletionOptions } from './base.js';
 
@@ -139,5 +140,45 @@ export class CloudflareProvider extends BaseProvider {
     if (!res.ok) return true; // unexpected non-2xx that isn't auth — don't disable
     const data = await res.json() as any;
     return data.success === true && data.result?.status === 'active';
+  }
+
+  async embeddings(
+    apiKey: string,
+    input: string | string[],
+    modelId: string,
+  ): Promise<EmbeddingResponse> {
+    const { accountId, token } = this.parseKey(apiKey);
+    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${modelId}`;
+
+    const res = await this.fetchWithTimeout(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: input,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Cloudflare Embeddings error ${res.status}: ${(err as any).error?.message ?? (err as any).errors?.[0]?.message ?? res.statusText}`);
+    }
+
+    const data = await res.json() as { result: { data: number[][] } };
+    return {
+      object: 'list',
+      data: data.result.data.map((emb, index) => ({
+        object: 'embedding',
+        index,
+        embedding: emb,
+      })),
+      model: modelId,
+      usage: {
+        prompt_tokens: 0,
+        total_tokens: 0,
+      },
+    };
   }
 }

@@ -36,6 +36,7 @@ export interface Model {
   monthlyTokenBudget: string;
   contextWindow: number | null;
   enabled: boolean;
+  supportsVision: boolean;
 }
 
 export type KeyStatus = 'healthy' | 'rate_limited' | 'invalid' | 'error' | 'unknown';
@@ -106,9 +107,36 @@ export type ChatToolChoice =
     };
   };
 
+export interface ChatMessageContentPartText {
+  type: 'text';
+  text: string;
+}
+
+export interface ChatMessageContentPartImage {
+  type: 'image_url';
+  image_url: {
+    url: string;
+    detail?: 'auto' | 'low' | 'high';
+  };
+}
+
+export interface ChatMessageContentPartFile {
+  type: 'file';
+  file: {
+    name: string;
+    mimeType: string;
+    data: string;
+  };
+}
+
+export type ChatMessageContentPart = 
+  | ChatMessageContentPartText 
+  | ChatMessageContentPartImage
+  | ChatMessageContentPartFile;
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  content: string | ChatMessageContentPart[] | null;
   name?: string;
   tool_call_id?: string;
   tool_calls?: ChatToolCall[];
@@ -216,4 +244,30 @@ export interface RateLimitStatus {
   tpm: { used: number; limit: number | null };
   available: boolean;
   nextResetAt: string | null;
+}
+
+// ---- Embedding Types ----
+
+export interface EmbeddingRequest {
+  model: string;
+  input: string | string[];
+  user?: string;
+  encoding_format?: 'float' | 'base64';
+  dimensions?: number;
+}
+
+export interface EmbeddingObject {
+  object: 'embedding';
+  index: number;
+  embedding: number[];
+}
+
+export interface EmbeddingResponse {
+  object: 'list';
+  data: EmbeddingObject[];
+  model: string;
+  usage: {
+    prompt_tokens: number;
+    total_tokens: number;
+  };
 }

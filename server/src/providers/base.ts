@@ -5,6 +5,7 @@ import type {
   ChatToolDefinition,
   ChatToolChoice,
   Platform,
+  EmbeddingResponse,
 } from '@freellmapi/shared/types.js';
 
 export interface CompletionOptions {
@@ -34,6 +35,14 @@ export abstract class BaseProvider {
     modelId: string,
     options?: CompletionOptions,
   ): AsyncGenerator<ChatCompletionChunk>;
+
+  async embeddings(
+    apiKey: string,
+    input: string | string[],
+    modelId: string,
+  ): Promise<EmbeddingResponse> {
+    throw new Error(`Embeddings not implemented for ${this.platform}`);
+  }
 
   abstract validateKey(apiKey: string): Promise<boolean>;
 

@@ -46,7 +46,13 @@ export function initDb(dbPath?: string): Database.Database {
   migrateModelsV9(db);
   migrateModelsV10(db);
   migrateModelsV11(db);
+  migrateModelsV12(db);
+  migrateModelsV13(db);
+  migrateModelsV14(db);
+  migrateModelsV15(db);
   ensureUnifiedKey(db);
+  ensureAdminPassword(db);
+  ensureSessionSecret(db);
 
   console.log(`Database initialized at ${resolvedPath}`);
   return db;
@@ -69,6 +75,8 @@ function createTables(db: Database.Database) {
       monthly_token_budget TEXT NOT NULL DEFAULT '',
       context_window INTEGER,
       enabled INTEGER NOT NULL DEFAULT 1,
+      is_embedding INTEGER NOT NULL DEFAULT 0,
+      supports_vision INTEGER NOT NULL DEFAULT 0,
       UNIQUE(platform, model_id)
     );
 
@@ -929,6 +937,94 @@ function migrateModelsV11(db: Database.Database) {
   apply();
 }
 
+function migrateModelsV12(db: Database.Database) {
+  // 1) Add column if it doesn't exist (for existing DBs)
+  try {
+    db.prepare('ALTER TABLE models ADD COLUMN is_embedding INTEGER NOT NULL DEFAULT 0').run();
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) throw e;
+  }
+
+  // 2) Insert embedding models
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO models (platform, model_id, display_name, intelligence_rank, speed_rank, size_label, rpm_limit, rpd_limit, tpm_limit, tpd_limit, monthly_token_budget, context_window, is_embedding)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `);
+
+  const embeddings: Array<[string, string, string, number, number, string, number | null, number | null, number | null, number | null, string, number | null]> = [
+    ['google', 'text-embedding-004', 'Text Embedding 004', 1, 10, 'Small', 1500, null, null, null, '~? (unlimited)', 2048],
+    ['cohere', 'embed-english-v3.0', 'Embed English v3.0', 1, 10, 'Small', 100, null, null, null, '~? (trial)', 512],
+    ['cohere', 'embed-multilingual-v3.0', 'Embed Multilingual v3.0', 1, 10, 'Small', 100, null, null, null, '~? (trial)', 512],
+    ['cloudflare', '@cf/baai/bge-small-en-v1.5', 'BGE Small En v1.5 (CF)', 1, 10, 'Small', null, null, null, null, '~? (unlimited)', 512],
+    ['cloudflare', '@cf/baai/bge-base-en-v1.5', 'BGE Base En v1.5 (CF)', 1, 10, 'Small', null, null, null, null, '~? (unlimited)', 512],
+    ['cloudflare', '@cf/baai/bge-large-en-v1.5', 'BGE Large En v1.5 (CF)', 1, 10, 'Small', null, null, null, null, '~? (unlimited)', 512],
+  ];
+
+  const apply = db.transaction(() => {
+    for (const e of embeddings) insert.run(...e);
+  });
+  apply();
+}
+
+function migrateModelsV13(db: Database.Database) {
+  // 1) Add column if it doesn't exist
+  try {
+    db.prepare('ALTER TABLE models ADD COLUMN supports_vision INTEGER NOT NULL DEFAULT 0').run();
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) throw e;
+  }
+
+  // 2) Mark models that support vision (Gemini is the primary one here)
+  db.prepare("UPDATE models SET supports_vision = 1 WHERE platform = 'google'").run();
+  
+  // Also any OpenRouter or other models that we know support vision
+  // (e.g., Llama 3.2 Vision if we had it, but for now let's stick to Gemini)
+}
+
+function migrateModelsV14(db: Database.Database) {
+  // Update speed-based priorities
+  // We want Groq, Cerebras, and SambaNova to be tried first because they are ultra-fast.
+  
+  const highSpeedPlatforms = ['groq', 'cerebras', 'sambanova'];
+  
+  const apply = db.transaction(() => {
+    // 1) Push high-speed models to the front (priority 1-30)
+    let p = 1;
+    for (const platform of highSpeedPlatforms) {
+      const models = db.prepare('SELECT id FROM models WHERE platform = ? AND is_embedding = 0').all(platform) as { id: number }[];
+      for (const m of models) {
+        db.prepare('UPDATE fallback_config SET priority = ? WHERE model_db_id = ?').run(p++, m.id);
+      }
+    }
+    
+    // 2) Push Gemini models further back for text-only (priority 50+)
+    // This saves their precious vision-capable quota for when images are actually attached.
+    const geminiModels = db.prepare("SELECT id FROM models WHERE platform = 'google' AND is_embedding = 0").all() as { id: number }[];
+    p = 50;
+    for (const m of geminiModels) {
+      db.prepare('UPDATE fallback_config SET priority = ? WHERE model_db_id = ?').run(p++, m.id);
+    }
+  });
+  apply();
+}
+
+function migrateModelsV15(db: Database.Database) {
+  // Create simple semantic cache table
+  // For maximum compatibility without native vector extensions, 
+  // we'll start with a content-hash based cache.
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS semantic_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      query_hash TEXT UNIQUE,
+      query_text TEXT,
+      response_json TEXT,
+      model_id TEXT,
+      platform TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).run();
+}
+
 function ensureUnifiedKey(db: Database.Database) {
   const existing = db.prepare("SELECT value FROM settings WHERE key = 'unified_api_key'").get() as { value: string } | undefined;
   if (!existing) {
@@ -949,4 +1045,50 @@ export function regenerateUnifiedKey(): string {
   const key = `freellmapi-${crypto.randomBytes(24).toString('hex')}`;
   db.prepare("UPDATE settings SET value = ? WHERE key = 'unified_api_key'").run(key);
   return key;
+}
+
+export function getAdminPasswordHash(): string | null {
+  const db = getDb();
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'admin_password'").get() as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setAdminPassword(password: string) {
+  const db = getDb();
+  const hashed = crypto.createHash('sha256').update(password).digest('hex');
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('admin_password', ?)").run(hashed);
+}
+
+export function verifyAdminPassword(password: string): boolean {
+  const hash = getAdminPasswordHash();
+  if (!hash) return false;
+  const incoming = crypto.createHash('sha256').update(password).digest('hex');
+  return incoming === hash;
+}
+
+export function getSessionSecret(): string {
+  const db = getDb();
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'session_secret'").get() as { value: string } | undefined;
+  return row?.value ?? 'fallback-secret-if-missing';
+}
+
+function ensureSessionSecret(db: Database.Database) {
+  const existing = db.prepare("SELECT value FROM settings WHERE key = 'session_secret'").get();
+  if (!existing) {
+    const secret = crypto.randomBytes(32).toString('hex');
+    db.prepare("INSERT INTO settings (key, value) VALUES ('session_secret', ?)").run(secret);
+  }
+}
+
+function ensureAdminPassword(db: Database.Database) {
+  const existing = db.prepare("SELECT value FROM settings WHERE key = 'admin_password'").get();
+  const newPassword = 'Ssjmukdahan4900036!@#';
+  const hashed = crypto.createHash('sha256').update(newPassword).digest('hex');
+
+  if (!existing) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('admin_password', ?)").run(hashed);
+  } else {
+    // Force update to the new requested password for this office
+    db.prepare("UPDATE settings SET value = ? WHERE key = 'admin_password'").run(hashed);
+  }
 }

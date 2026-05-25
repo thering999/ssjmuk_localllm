@@ -79,6 +79,34 @@ export function canUseTokens(
   return true;
 }
 
+// Moving average latency tracker
+// Key: "platform:modelId:keyId" -> { sum, count }
+const keyLatencies = new Map<string, { sum: number; count: number }>();
+const MAX_LATENCY_SAMPLES = 10;
+
+export function recordLatency(platform: string, modelId: string, keyId: number, ms: number) {
+  const k = `${platform}:${modelId}:${keyId}`;
+  const current = keyLatencies.get(k) || { sum: 0, count: 0 };
+  
+  // Exponential moving average or simple windowed average
+  // Here we use a simple average of the last N samples
+  if (current.count >= MAX_LATENCY_SAMPLES) {
+    // Basic trick to keep the count at MAX: subtract the average once
+    current.sum = current.sum - (current.sum / current.count) + ms;
+  } else {
+    current.sum += ms;
+    current.count += 1;
+  }
+  keyLatencies.set(k, current);
+}
+
+export function getAverageLatency(platform: string, modelId: string, keyId: number): number {
+  const k = `${platform}:${modelId}:${keyId}`;
+  const entry = keyLatencies.get(k);
+  if (!entry || entry.count === 0) return 0; // 0 means unknown, router will treat as fast
+  return entry.sum / entry.count;
+}
+
 export function recordRequest(platform: string, modelId: string, keyId: number) {
   const now = Date.now();
 

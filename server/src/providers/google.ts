@@ -6,6 +6,7 @@ import type {
   ChatToolChoice,
   ChatToolDefinition,
   TokenUsage,
+  EmbeddingResponse,
 } from '@freellmapi/shared/types.js';
 import { BaseProvider, type CompletionOptions } from './base.js';
 
@@ -14,6 +15,14 @@ const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 interface GeminiPart {
   text?: string;
   thoughtSignature?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
+  fileData?: {
+    mimeType: string;
+    fileUri: string;
+  };
   functionCall?: {
     id?: string;
     name?: string;
@@ -121,6 +130,10 @@ function toGeminiContents(messages: ChatMessage[]) {
 
         if (typeof m.content === 'string' && m.content.length > 0) {
           parts.push({ text: m.content });
+        } else if (Array.isArray(m.content)) {
+          for (const p of m.content) {
+            if (p.type === 'text') parts.push({ text: p.text });
+          }
         }
 
         for (const call of m.tool_calls ?? []) {
@@ -160,9 +173,37 @@ function toGeminiContents(messages: ChatMessage[]) {
         };
       }
 
+      const parts: GeminiPart[] = [];
+      if (typeof m.content === 'string') {
+        parts.push({ text: m.content });
+      } else if (Array.isArray(m.content)) {
+        for (const p of m.content) {
+          if (p.type === 'text') {
+            parts.push({ text: p.text });
+          } else if (p.type === 'image_url') {
+            const url = p.image_url.url;
+            if (url.startsWith('data:')) {
+              const [header, base64] = url.split(',');
+              const mimeType = header.split(':')[1].split(';')[0];
+              parts.push({
+                inlineData: { mimeType, data: base64 }
+              });
+            } else {
+              parts.push({ text: `[Image URL: ${url}]` });
+            }
+          } else if (p.type === 'file') {
+            const data = p.file.data;
+            const base64 = data.includes(',') ? data.split(',')[1] : data;
+            parts.push({
+              inlineData: { mimeType: p.file.mimeType, data: base64 }
+            });
+          }
+        }
+      }
+
       return {
         role: 'user',
-        parts: [{ text: typeof m.content === 'string' ? m.content : '' }],
+        parts: parts.length > 0 ? parts : [{ text: '' }],
       };
     })
     .filter((entry): entry is { role: 'user' | 'model'; parts: GeminiPart[] } => entry !== null);
@@ -426,5 +467,77 @@ export class GoogleProvider extends BaseProvider {
       10000,
     );
     return res.status !== 401 && res.status !== 403;
+  }
+
+  async embeddings(
+    apiKey: string,
+    input: string | string[],
+    modelId: string,
+  ): Promise<EmbeddingResponse> {
+    const inputs = Array.isArray(input) ? input : [input];
+    
+    // For single input, use embedContent. For multiple, use batchEmbedContents.
+    if (inputs.length === 1) {
+      const url = `${API_BASE}/models/${modelId}:embedContent?key=${apiKey}`;
+      const res = await this.fetchWithTimeout(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: { parts: [{ text: inputs[0] }] }
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`Google Embeddings error ${res.status}: ${(err as any).error?.message ?? res.statusText}`);
+      }
+
+      const data = await res.json() as { embedding: { values: number[] } };
+      return {
+        object: 'list',
+        data: [{
+          object: 'embedding',
+          index: 0,
+          embedding: data.embedding.values,
+        }],
+        model: modelId,
+        usage: {
+          prompt_tokens: 0, // Google doesn't return usage for embeddings
+          total_tokens: 0,
+        },
+      };
+    } else {
+      const url = `${API_BASE}/models/${modelId}:batchEmbedContents?key=${apiKey}`;
+      const res = await this.fetchWithTimeout(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: inputs.map(text => ({
+            model: `models/${modelId}`,
+            content: { parts: [{ text }] }
+          }))
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`Google Batch Embeddings error ${res.status}: ${(err as any).error?.message ?? res.statusText}`);
+      }
+
+      const data = await res.json() as { embeddings: { values: number[] }[] };
+      return {
+        object: 'list',
+        data: data.embeddings.map((emb, index) => ({
+          object: 'embedding',
+          index,
+          embedding: emb.values,
+        })),
+        model: modelId,
+        usage: {
+          prompt_tokens: 0,
+          total_tokens: 0,
+        },
+      };
+    }
   }
 }
