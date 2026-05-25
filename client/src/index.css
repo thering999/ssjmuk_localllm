@@ -39,10 +39,6 @@
     background: rgba(0, 0, 0, 0.3);
   }
 
-  .text-neon {
-    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
-  }
-
   .animate-plasma {
     background-size: 200% auto;
     animation: plasma-flow 6s linear infinite;
@@ -103,7 +99,7 @@
   content: '';
   position: absolute;
   inset: -2px;
-  background: linear-gradient(45deg, var(--primary), var(--secondary), var(--accent));
+  background: linear-gradient(45deg, hsl(142.1 70.6% 45.3%), hsl(217.2 91.2% 59.8%), hsl(262.1 83.3% 57.8%));
   border-radius: inherit;
   z-index: -1;
   filter: blur(10px);
@@ -112,5 +108,9 @@
 }
 
 .prose code {
-  @apply text-primary font-black px-1.5 py-0.5 rounded-md bg-primary/10;
+  color: hsl(142.1 70.6% 45.3%);
+  font-weight: 900;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  background-color: hsla(142.1, 70.6%, 45.3%, 0.1);
 }
