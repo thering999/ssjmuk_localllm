@@ -29,7 +29,7 @@
 html, body {
   background-color: #09090b !important; /* Force black-zinc background */
   color: #ffffff;
-  overflow: hidden;
+  min-height: 100vh;
 }
 
 .cyber-glass {

@@ -40,7 +40,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <div className="min-h-screen relative overflow-hidden bg-zinc-950 text-white selection:bg-emerald-500/40">
+        <div className="min-h-screen relative bg-zinc-950 text-white selection:bg-emerald-500/40">
           
           <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#09090b]">
              <div className="absolute top-[-25%] left-[-15%] size-[120%] rounded-full bg-emerald-500/10 blur-[180px] aura-primary" />
