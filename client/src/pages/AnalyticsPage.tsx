@@ -20,8 +20,8 @@ function formatTokens(n?: number): string {
 
 function Stat({ label, value, className }: { label: string; value: string | number; className?: string }) {
   return (
-    <div className="rounded-3xl border border-white/40 bg-white/40 dark:bg-black/20 backdrop-blur-2xl px-6 py-5 shadow-xl transition-transform hover:scale-105">
-      <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">{label}</p>
+    <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl px-6 py-5 shadow-2xl transition-transform hover:scale-105">
+      <p className="text-[10px] text-white/40 uppercase font-black tracking-widest">{label}</p>
       <p className={`text-2xl font-black tabular-nums mt-2 text-primary tracking-tighter ${className ?? ''}`}>{value}</p>
     </div>
   )
@@ -29,8 +29,8 @@ function Stat({ label, value, className }: { label: string; value: string | numb
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[2.5rem] border border-white/40 bg-white/40 dark:bg-black/20 backdrop-blur-3xl overflow-hidden shadow-2xl transition-all hover:shadow-primary/5">
-      <div className="px-8 py-5 border-b border-white/20 bg-white/20 dark:bg-white/5 flex items-center justify-between">
+    <div className="rounded-[2.5rem] border border-white/10 bg-black/40 backdrop-blur-3xl overflow-hidden shadow-2xl transition-all hover:shadow-primary/5">
+      <div className="px-8 py-5 border-b border-white/10 bg-white/5 flex items-center justify-between">
         <h3 className="text-sm font-black uppercase tracking-widest text-primary">{title}</h3>
         <div className="size-2 rounded-full bg-primary animate-pulse" />
       </div>
@@ -39,8 +39,18 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   )
 }
 
-const axisStyle = { fontSize: 10, fontWeight: '900', fill: 'var(--muted-foreground)' } as const
-const gridStyle = 'rgba(0,0,0,0.05)'
+const axisStyle = { fontSize: 10, fontWeight: '900', fill: 'rgba(255,255,255,0.4)' } as const
+const gridStyle = 'rgba(255,255,255,0.05)'
+const tooltipStyle = {
+  backgroundColor: 'rgba(9,9,11,0.9)',
+  backdropFilter: 'blur(10px)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '16px',
+  fontSize: '10px',
+  fontWeight: 'bold',
+  color: '#fff',
+  boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+}
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<TimeRange>('7d')
@@ -81,13 +91,13 @@ export default function AnalyticsPage() {
         title="Intelligence Analytics"
         description="การวิเคราะห์ข้อมูลการใช้งาน AI แบบเรียลไทม์ (สสจ.มุกดาหาร)"
         actions={
-          <div className="flex gap-1.5 bg-white/40 dark:bg-black/20 p-1.5 rounded-full border border-white/40 shadow-xl backdrop-blur-md">
+          <div className="flex gap-1.5 bg-white/5 p-1.5 rounded-full border border-white/10 shadow-2xl backdrop-blur-md">
             {(['24h', '7d', '30d'] as TimeRange[]).map(r => (
               <Button
                 key={r}
                 variant={range === r ? 'secondary' : 'ghost'}
                 size="sm"
-                className={`rounded-full px-5 font-black uppercase tracking-widest text-[10px] ${range === r ? 'bg-primary text-white shadow-lg' : ''}`}
+                className={`rounded-full px-5 font-black uppercase tracking-widest text-[10px] ${range === r ? 'bg-primary text-white shadow-lg' : 'text-white/40 hover:text-white'}`}
                 onClick={() => setRange(r)}
               >
                 {r}
@@ -111,7 +121,7 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           <Panel title="Request Volume by Platform">
             {byPlatform.length === 0 ? (
-              <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20">No Data</div>
+              <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20 text-white/40">No Data</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={byPlatform} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -119,14 +129,14 @@ export default function AnalyticsPage() {
                   <XAxis dataKey="platform" tick={axisStyle} tickLine={false} axisLine={false} />
                   <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
                   <Tooltip 
-                    cursor={{fill: 'rgba(var(--primary), 0.05)'}}
-                    contentStyle={{ backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 20, fontSize: 10, fontWeight: 'bold' }} 
+                    cursor={{fill: 'rgba(255, 255, 255, 0.05)'}}
+                    contentStyle={tooltipStyle} 
                   />
                   <Bar dataKey="requests" fill="url(#colorBar)" radius={[10, 10, 0, 0]}>
                      <defs>
                         <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--primary)" stopOpacity={1}/>
-                          <stop offset="95%" stopColor="var(--secondary)" stopOpacity={0.8}/>
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={1}/>
+                          <stop offset="95%" stopColor="hsl(var(--secondary))" stopOpacity={0.8}/>
                         </linearGradient>
                       </defs>
                   </Bar>
@@ -137,19 +147,19 @@ export default function AnalyticsPage() {
 
           <Panel title="Platform Performance (ms)">
             {byPlatform.length === 0 ? (
-              <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20">No Data</div>
+              <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20 text-white/40">No Data</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={byPlatform} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="8 8" vertical={false} stroke={gridStyle} />
                   <XAxis dataKey="platform" tick={axisStyle} tickLine={false} axisLine={false} />
                   <YAxis unit="ms" tick={axisStyle} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 20, fontSize: 10, fontWeight: 'bold' }} />
-                  <Area type="monotone" dataKey="avgLatencyMs" stroke="var(--primary)" fill="url(#colorLatency)" strokeWidth={4} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Area type="monotone" dataKey="avgLatencyMs" stroke="hsl(var(--primary))" fill="url(#colorLatency)" strokeWidth={4} />
                   <defs>
                     <linearGradient id="colorLatency" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                 </AreaChart>
@@ -160,17 +170,17 @@ export default function AnalyticsPage() {
           <div className="lg:col-span-2">
             <Panel title="Intelligence Timeline">
               {timeline.length === 0 ? (
-                <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20">No Data</div>
+                <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20 text-white/40">No Data</div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={timeline} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="4 4" stroke={gridStyle} vertical={false} />
                     <XAxis dataKey="timestamp" tick={axisStyle} tickLine={false} axisLine={false} />
                     <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 20, fontSize: 10, fontWeight: 'bold' }} />
-                    <Legend wrapperStyle={{ fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.1em' }} iconType="circle" />
-                    <Line type="step" dataKey="successCount" name="Success" stroke="var(--primary)" strokeWidth={6} dot={{ r: 4, strokeWidth: 2, fill: 'white' }} activeDot={{ r: 8 }} />
-                    <Line type="step" dataKey="failureCount" name="Failures" stroke="var(--destructive)" strokeWidth={4} strokeDasharray="10 10" dot={false} />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Legend wrapperStyle={{ fontSize: 10, fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.1em', paddingTop: 20 }} iconType="circle" />
+                    <Line type="step" dataKey="successCount" name="Success" stroke="hsl(var(--primary))" strokeWidth={6} dot={{ r: 4, strokeWidth: 2, fill: 'white' }} activeDot={{ r: 8 }} />
+                    <Line type="step" dataKey="failureCount" name="Failures" stroke="#ef4444" strokeWidth={4} strokeDasharray="10 10" dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -180,31 +190,31 @@ export default function AnalyticsPage() {
           <div className="lg:col-span-2">
             <Panel title="Advanced Per-Model Breakdown">
               {byModel.length === 0 ? (
-                <div className="h-40 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20">No Data</div>
+                <div className="h-40 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20 text-white/40">No Data</div>
               ) : (
-                <div className="max-h-[500px] overflow-y-auto -mx-8">
+                <div className="max-h-[500px] overflow-y-auto -mx-8 custom-scrollbar">
                   <Table>
-                    <TableHeader className="bg-primary/5">
-                      <TableRow className="border-white/10">
-                        <TableHead className="pl-8 font-black uppercase text-[10px] tracking-widest text-primary">Model</TableHead>
-                        <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary">Provider</TableHead>
-                        <TableHead className="text-right font-black uppercase text-[10px] tracking-widest text-primary">Requests</TableHead>
-                        <TableHead className="text-right font-black uppercase text-[10px] tracking-widest text-primary">Success</TableHead>
-                        <TableHead className="text-right font-black uppercase text-[10px] tracking-widest text-primary">Latency</TableHead>
-                        <TableHead className="text-right font-black uppercase text-[10px] tracking-widest text-primary">Tokens</TableHead>
+                    <TableHeader className="bg-white/5">
+                      <TableRow className="border-white/5">
+                        <TableHead className="pl-8 font-black uppercase text-[10px] tracking-widest text-emerald-400">Model</TableHead>
+                        <TableHead className="font-black uppercase text-[10px] tracking-widest text-emerald-400">Provider</TableHead>
+                        <TableHead className="text-right font-black uppercase text-[10px] tracking-widest text-emerald-400">Requests</TableHead>
+                        <TableHead className="text-right font-black uppercase text-[10px] tracking-widest text-emerald-400">Success</TableHead>
+                        <TableHead className="text-right font-black uppercase text-[10px] tracking-widest text-emerald-400">Latency</TableHead>
+                        <TableHead className="text-right font-black uppercase text-[10px] tracking-widest text-emerald-400">Tokens</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {byModel.map((m: any, i: number) => (
-                        <TableRow key={i} className="border-white/10 hover:bg-white/30 transition-colors group">
-                          <TableCell className="pl-8 text-sm font-black group-hover:text-primary transition-colors">{m.displayName}</TableCell>
-                          <TableCell className="text-[10px] font-bold opacity-60 uppercase">{m.platform}</TableCell>
-                          <TableCell className="text-right font-black tabular-nums">{m.requests}</TableCell>
+                        <TableRow key={i} className="border-white/5 hover:bg-white/5 transition-colors group">
+                          <TableCell className="pl-8 text-sm font-black group-hover:text-emerald-400 transition-colors text-white">{m.displayName}</TableCell>
+                          <TableCell className="text-[10px] font-bold opacity-40 uppercase text-white">{m.platform}</TableCell>
+                          <TableCell className="text-right font-black tabular-nums text-white">{m.requests}</TableCell>
                           <TableCell className="text-right font-black tabular-nums">
-                             <span className={m.successRate > 90 ? 'text-emerald-500' : 'text-primary'}>{m.successRate}%</span>
+                             <span className={m.successRate > 90 ? 'text-emerald-500' : 'text-emerald-400'}>{m.successRate}%</span>
                           </TableCell>
-                          <TableCell className="text-right font-black tabular-nums text-secondary">{m.avgLatencyMs} ms</TableCell>
-                          <TableCell className="text-right font-black tabular-nums pr-8">{formatTokens(m.totalInputTokens + m.totalOutputTokens)}</TableCell>
+                          <TableCell className="text-right font-black tabular-nums text-blue-400">{m.avgLatencyMs} ms</TableCell>
+                          <TableCell className="text-right font-black tabular-nums pr-8 text-white">{formatTokens(m.totalInputTokens + m.totalOutputTokens)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -216,15 +226,15 @@ export default function AnalyticsPage() {
 
           <Panel title="System Failures Distribution">
             {!errorDist?.byPlatform?.length ? (
-              <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20">No Errors</div>
+              <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20 text-white/40">No Errors</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={errorDist.byPlatform} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="8 8" vertical={false} stroke={gridStyle} />
                   <XAxis dataKey="platform" tick={axisStyle} tickLine={false} axisLine={false} />
                   <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 20, fontSize: 10, fontWeight: 'bold' }} />
-                  <Bar dataKey="count" fill="var(--destructive)" radius={[10, 10, 0, 0]} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="count" fill="#ef4444" radius={[10, 10, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -232,17 +242,17 @@ export default function AnalyticsPage() {
 
           <Panel title="Live Incident Feed">
             {errors.length === 0 ? (
-              <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20">System Healthy</div>
+              <div className="h-60 flex items-center justify-center font-black uppercase tracking-[0.2em] opacity-20 text-white/40">System Healthy</div>
             ) : (
-              <div className="max-h-[280px] overflow-y-auto -mx-8">
+              <div className="max-h-[280px] overflow-y-auto -mx-8 custom-scrollbar">
                 <div className="px-8 space-y-4">
                   {errors.slice(0, 20).map((e: any) => (
-                    <div key={e.id} className="p-4 rounded-2xl bg-white/20 border border-destructive/10 flex flex-col gap-1 hover:bg-destructive/5 transition-colors group">
+                    <div key={e.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-1 hover:bg-destructive/10 transition-colors group">
                       <div className="flex items-center justify-between">
                          <span className="text-[10px] font-black uppercase text-destructive tracking-widest">{e.platform} Incident</span>
-                         <span className="text-[10px] font-bold opacity-40">{new Date(e.createdAt).toLocaleTimeString()}</span>
+                         <span className="text-[10px] font-bold opacity-40 text-white/40">{new Date(e.createdAt).toLocaleTimeString()}</span>
                       </div>
-                      <p className="text-xs font-bold line-clamp-2 group-hover:line-clamp-none transition-all">{e.error}</p>
+                      <p className="text-xs font-bold line-clamp-2 group-hover:line-clamp-none transition-all text-white/80">{e.error}</p>
                     </div>
                   ))}
                 </div>
