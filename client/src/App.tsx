@@ -24,8 +24,8 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
       className={({ isActive }) =>
         `relative text-[10px] font-black px-6 py-2 rounded-full transition-all duration-500 overflow-hidden group/nav uppercase tracking-widest ${
           isActive
-            ? 'text-white bg-gradient-to-r from-emerald-500 via-blue-600 to-emerald-500 shadow-[0_0_30px_rgba(74,222,128,0.4)] scale-105 ring-2 ring-white/30'
-            : 'text-zinc-500 hover:text-emerald-400 hover:bg-white/5'
+            ? 'text-white bg-gradient-to-r from-emerald-500 via-blue-600 to-emerald-500 shadow-[0_0_20px_rgba(74,222,128,0.4)] scale-105 ring-2 ring-white/30'
+            : 'text-zinc-500 hover:text-emerald-400 hover:bg-white/10'
         }`
       }
     >
@@ -42,7 +42,6 @@ function App() {
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <div className="min-h-screen relative overflow-hidden bg-zinc-950 text-white selection:bg-emerald-500/40">
           
-          {/* SUPREME COSMIC CORE BACKGROUND */}
           <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#09090b]">
              <div className="absolute top-[-25%] left-[-15%] size-[120%] rounded-full bg-emerald-500/10 blur-[180px] aura-primary" />
              <div className="absolute bottom-[-30%] right-[-15%] size-[120%] rounded-full bg-blue-600/15 blur-[200px] aura-secondary" />
